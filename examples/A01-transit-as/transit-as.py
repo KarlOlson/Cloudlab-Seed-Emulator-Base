@@ -4,7 +4,7 @@
 from seedemu.layers import Base, Routing, Ebgp, PeerRelationship, Ibgp, Ospf
 from seedemu.services import WebService
 from seedemu.core import Emulator, Binding, Filter
-from seedemu.compiler import Docker
+from seedemu.compiler import Docker, DistributedDocker
 
 emu = Emulator()
 
@@ -47,7 +47,7 @@ as151 = base.createAutonomousSystem(151)
 as151.createNetwork('net0')
 as151.createRouter('router0').joinNetwork('net0').joinNetwork('ix100')
 
-# Create a web-service node 
+# Create a web-service node
 as151.createHost('web').joinNetwork('net0')
 web.install('web151')
 emu.addBinding(Binding('web151', filter = Filter(nodeName = 'web', asn = 151)))
@@ -90,4 +90,4 @@ emu.dump('base-component.bin')
 # Generate the docker file
 
 emu.render()
-emu.compile(Docker(), './output')
+emu.compile(DistributedDocker(), './containers')

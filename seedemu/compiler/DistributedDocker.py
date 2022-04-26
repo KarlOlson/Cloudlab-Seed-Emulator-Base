@@ -19,6 +19,7 @@ DistributedDockerCompilerFileTemplates['compose_network_ix_worker'] = """\
 DistributedDockerCompilerFileTemplates['compose_network_ix_master'] = """\
     {netId}:
         driver: overlay
+        attachable: true
         ipam:
             config:
                 - subnet: {prefix}
@@ -33,12 +34,12 @@ class DistributedDocker(Docker):
     DistributedDocker is one of the compiler driver. It compiles the lab to
     docker containers. This compiler will generate one set of containers with
     their docker-compose.yml for each AS, enable you to run the emulator
-    distributed. 
+    distributed.
 
-    This works by making every IX network overlay network. 
+    This works by making every IX network overlay network.
     """
 
-    def __init__(self, namingScheme: str = "as{asn}{role}-{name}-{primaryIp}"):
+    def __init__(self, namingScheme: str = "as{asn}{role}_{name}_{primaryIp}"):
         """!
         @brief DistributedDocker compiler constructor.
 
@@ -70,6 +71,11 @@ class DistributedDocker(Docker):
         registry = emulator.getRegistry()
         scopes = set()
         for (scope, _, _) in registry.getAll().keys(): scopes.add(scope)
+        sortedScopes = sorted(scopes)
+        sortedScopes.reverse()
+        sortedScopes.pop(0)
+        for scope in sortedScopes:
+            print(scope, file=open('priority.txt', 'a'))
 
         ix_nets = ''
 
