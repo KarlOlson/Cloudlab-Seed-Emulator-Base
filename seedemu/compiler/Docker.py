@@ -25,6 +25,37 @@ for f in /proc/sys/net/ipv4/conf/*/rp_filter; do echo 0 > "$f"; done
 tail -f /dev/null
 """
 
+DockerCompilerFileTemplates['ganache'] = """\
+#!/bin/bash
+mkdir /bgp_smart_contracts/logs
+touch /bgp_smart_contracts/logs/GanacheLogFile.log
+LOG_LOCATION=/bgp_smart_contracts/logs
+exec > >(tee -i $LOG_LOCATION/GanacheLogFile.log)
+exec 2>&1
+ganache -a 200 -p 8545 -h 10.100.0.100 --deterministic --database.dbPath /ganache &
+sleep 2
+cd /bgp_smart_contracts/src 
+python3 compile.py 
+sleep 2 
+python3 deploy.py ACCOUNT0
+sleep 2
+python3 account_script.py 
+echo 'Ganache setup ran. Check Logs for details.'
+cd ..
+cd ..
+"""
+
+DockerCompilerFileTemplates['proxy'] = """\
+#!/bin/bash
+mkdir /bgp_smart_contracts/logs
+LOG_LOCATION=/bgp_smart_contracts/logs
+exec > >(tee -i $LOG_LOCATION/ProxyLogFile.log)
+exec 2>&1
+cd /bgp_smart_contracts/src/
+python3 proxy.py
+echo 'Proxy setup ran. Check Logs for details.'
+"""
+
 DockerCompilerFileTemplates['seedemu_sniffer'] = """\
 #!/bin/bash
 last_pid=0
@@ -758,6 +789,18 @@ class Docker(Compiler):
             start_commands += '/replace_address.sh\n'
             dockerfile += self._addFile('/replace_address.sh', DockerCompilerFileTemplates['replace_address_script'])
             dockerfile += self._addFile('/dummy_addr_map.txt', dummy_addr_map)
+            dockerfile += self._addFile('/ganache.sh', DockerCompilerFileTemplates['ganache'])
+            dockerfile += self._addFile('/proxy.sh', DockerCompilerFileTemplates['proxy'])
+            
+        if node.getName() == "ix100":
+                dockerfile += self._addFile('/ganache.sh', DockerCompilerFileTemplates['ganache'])
+                start_commands += 'chmod +x /ganache.sh\n'
+                start_commands += '/ganache.sh\n'
+
+        else:
+                dockerfile += self._addFile('/proxy.sh', DockerCompilerFileTemplates['proxy'])
+                start_commands += 'chmod +x /proxy.sh\n'
+                start_commands += '/proxy.sh\n'
 
         for (cmd, fork) in node.getStartCommands():
             start_commands += '{}{}\n'.format(cmd, ' &' if fork else '')
@@ -769,6 +812,24 @@ class Docker(Compiler):
         dockerfile += self._addFile('/seedemu_sniffer', DockerCompilerFileTemplates['seedemu_sniffer'])
         dockerfile += self._addFile('/seedemu_worker', DockerCompilerFileTemplates['seedemu_worker'])
 
+        dockerfile += 'RUN apt-get install -y npm build-essential python3 python3-pip python-dev libnetfilter-queue-dev nodejs git\n'
+        dockerfile += 'RUN pip3 install py-solc-x web3 python-dotenv scapy==2.4.4\n'
+        dockerfile += 'RUN npm update -g\n'
+        dockerfile += 'RUN npm install -g ganache\n'
+        dockerfile += 'RUN npm install -g npm@8.5.3\n'
+        dockerfile += 'RUN pip3 install --upgrade pip\n'
+        dockerfile += 'RUN pip3 install eth-brownie Flask scapy flask-restful\n'
+        dockerfile += 'RUN pip3 install NetfilterQueue eth-utils\n'
+        #dockerfile += 'RUN git clone https://github.com/secdev/scapy.git\n'
+        #dockerfile += 'WORKDIR /scapy\n'
+        #dockerfile += 'RUN python3 setup.py install\n'
+        #dockerfile += 'WORKDIR /\n'
+        dockerfile += 'RUN git clone --depth 1 --filter=blob:none --no-checkout https://github.com/KarlOlson/Seed_scalable/\n'
+	    dockerfile += 'WORKDIR /Seed_scalable\n'
+        dockerfile += 'RUN git sparse-checkout set bgp_smart_contracts\n'
+	    dockerfile += 'RUN mv bgp_smart_contracts ../bgp_smart_contracts\n'
+	    dockerfile += 'WORKDIR /\n'
+        dockerfile += 'RUN python3 /bgp_smart_contracts/src/solc_ver_install.py\n'
         dockerfile += 'RUN chmod +x /start.sh\n'
         dockerfile += 'RUN chmod +x /seedemu_sniffer\n'
         dockerfile += 'RUN chmod +x /seedemu_worker\n'
